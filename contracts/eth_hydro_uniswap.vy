@@ -15,7 +15,7 @@ snowflakeAddress: public(address)
 hydroTokenAddress: public(address)
 uniswapFactoryAddress: public(address)
 uniswapHydroExchangeAddress: public(address)
-# _placeholder: bytes[1]
+_placeholder: bytes[1]
 
 @public
 def __init__(_snowflakeAddress: address, _uniswapFactoryAddress: address):
@@ -29,67 +29,37 @@ def __init__(_snowflakeAddress: address, _uniswapFactoryAddress: address):
   assert (_uniswapHydroExchangeAddress != ZERO_ADDRESS)
   self.uniswapHydroExchangeAddress = _uniswapHydroExchangeAddress
 
-# @private
-# def depositIntoSnowflake(tokens_to_deposit: uint256, recipient: address):
-#   convertedRecipient: bytes[32] = slice(concat(convert(recipient, bytes32), self._placeholder), start=0, len=32)
-#   assert HydroToken(self.hydroTokenAddress).approveAndCall(self, tokens_to_deposit, convertedRecipient)
+@public
+@payable
+def __default__():
+  pass
+
+@private
+def depositIntoSnowflake(tokens_to_deposit: uint256, recipientEIN: uint256):
+  convertedRecipient: bytes[32] = slice(concat(convert(recipientEIN, bytes32), self._placeholder), start=0, len=32)
+  assert HydroToken(self.hydroTokenAddress).approveAndCall(self.snowflakeAddress, tokens_to_deposit, convertedRecipient)
 
 @public
 @payable
-def swapAndDepositOutputTEST(tokens_bought: uint256, deadline: timestamp, recipient: address):
-  _eth_sold: uint256(wei) = UniswapHydroExchange(self.uniswapHydroExchangeAddress).ethToTokenSwapOutput(tokens_bought, deadline, value=msg.value / 2)
+def swapAndDepositInput(min_tokens: uint256, deadline: timestamp, recipientEIN: uint256) -> uint256:
+  tokens_bought: uint256 = UniswapHydroExchange(
+    self.uniswapHydroExchangeAddress
+  ).ethToTokenSwapInput(min_tokens, deadline, value=msg.value)
 
-  # id: bytes[4] = method_id("ethToTokenSwapOutput(uint256,uint256)", bytes[4])
-  # data: bytes[64] = concat(convert(tokens_bought, bytes32), convert(deadline, bytes32))
-  #
-  # _eth_sold: bytes[32] = raw_call(self.uniswapHydroExchangeAddress, concat(id, convert(tokens_bought, bytes32), convert(deadline, bytes32)), outsize=32, gas=1000000, value=as_wei_value(1, "ether"))
-  # eth_sold: uint256 = convert(_eth_sold, uint256)
+  self.depositIntoSnowflake(tokens_bought, recipientEIN)
 
-  # self.depositIntoSnowflake(tokens_bought, recipient)
+  return tokens_bought
 
-  # return tokens_bought
+@public
+@payable
+def swapAndDepositOutput(tokens_bought: uint256, deadline: timestamp, recipientEIN: uint256) -> uint256(wei):
+  eth_sold: uint256(wei) = UniswapHydroExchange(
+    self.uniswapHydroExchangeAddress
+  ).ethToTokenSwapOutput(tokens_bought, deadline, value=msg.value)
 
-# @public
-# @payable
-# def swapAndDepositOutputTEST2(tokens_bought: uint256, deadline: timestamp):
-#   id: bytes[4] = method_id("ethToTokenSwapOutput(uint256,uint256)", bytes[4])
-#   # data: bytes[64] = concat(convert(tokens_bought, bytes32), convert(deadline, bytes32))
-#
-#   raw_call(self.uniswapHydroExchangeAddress, concat(id, convert(tokens_bought, bytes32), convert(deadline, bytes32)), outsize=0, gas=as_wei_value(1000000, "gwei"), value=as_wei_value(1, "ether"))
-#   # eth_sold: uint256 = convert(_eth_sold, uint256)
-#
-#   # self.depositIntoSnowflake(tokens_bought, recipient)
-#
-#   # return tokens_bought
-#
-# @public
-# @payable
-# def swapAndDepositInput(min_tokens: uint256, deadline: timestamp, recipient: address) -> uint256:
-#   id: bytes[4] = method_id("ethToTokenTransferInput(uint256,uint256,address)", bytes[4])
-#   data: bytes[96] = concat(
-#     convert(min_tokens, bytes32), convert(deadline, bytes32), convert(self, bytes32)
-#   )
-#   _tokens_bought: bytes[32] = raw_call(
-#     self.uniswapHydroExchangeAddress, concat(id, data), outsize=32, gas=msg.gas, value=msg.value
-#   )
-#   tokens_bought: uint256 = convert(_tokens_bought, uint256)
-#
-#   self.depositIntoSnowflake(tokens_bought, recipient)
-#
-#   return tokens_bought
-#
-# @public
-# @payable
-# def swapAndDepositOutput(tokens_bought: uint256, deadline: timestamp, recipient: address) -> uint256:
-#   id: bytes[4] = method_id("ethToTokenTransferOutput(uint256,uint256,address)", bytes[4])
-#   data: bytes[96] = concat(
-#     convert(tokens_bought, bytes32), convert(deadline, bytes32), convert(self, bytes32)
-#   )
-#   _eth_sold: bytes[32] = raw_call(
-#     self.uniswapHydroExchangeAddress, concat(id, data), outsize=32, gas=msg.gas, value=msg.value
-#   )
-#   eth_sold: uint256 = convert(_eth_sold, uint256)
-#
-#   self.depositIntoSnowflake(tokens_bought, recipient)
-#
-#   return tokens_bought
+  if (self.balance > 0):
+    send(msg.sender, self.balance)
+
+  self.depositIntoSnowflake(tokens_bought, recipientEIN)
+
+  return eth_sold
